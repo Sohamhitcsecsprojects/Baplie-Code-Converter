@@ -1,112 +1,118 @@
 import React, { useState } from "react";
-import {Helmet} from "react-helmet";
+import { Helmet } from "react-helmet";
 import axios from "axios";
-import { ToastContainer, toast } from "react-toastify"; // Named imports
-import "react-toastify/dist/ReactToastify.css";         // Import CSS for styling
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import "./App.css";
 
-function App() {
-  const [file, setFile] = useState(null);
-  const [vesselName, setVesselName] = useState("");
-  const [senderName, setSenderName] = useState("");
-  const [receiverName, setReceiverName] = useState("");
-  const [baplieData, setBaplieData] = useState("");
+const InputField = ({ label, name, value, onChange }) => (
+  <div className="form-group">
+    <label htmlFor={name}>{label}</label>
+    <input
+      type="text"
+      id={name}
+      name={name}
+      value={value}
+      onChange={onChange}
+      placeholder={`Enter ${label.toLowerCase()}`}
+    />
+  </div>
+);
 
-  const handleFileChange = (e) => {
-    setFile(e.target.files[0]);
+function App() {
+  const [formData, setFormData] = useState({
+    file: null,
+    vesselName: "",
+    senderName: "",
+    receiverName: "",
+  });
+
+  const [baplieData, setBaplieData] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleChange = (e) => {
+    const { name, value, files } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: files ? files[0] : value,
+    }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!file || !vesselName || !senderName || !receiverName) {
+    if (!formData.file || !formData.vesselName || !formData.senderName || !formData.receiverName) {
       toast.error("Please fill in all fields and upload a file!");
       return;
     }
 
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("vesselName", vesselName);
-    formData.append("senderName", senderName);
-    formData.append("receiverName", receiverName);
+    setLoading(true);
+    const data = new FormData();
+    Object.keys(formData).forEach((key) => data.append(key, formData[key]));
 
     try {
-      const response = await axios.post("http://localhost:5000/upload", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
+      const { data: response } = await axios.post("http://localhost:5000/upload", data, {
+        headers: { "Content-Type": "multipart/form-data" },
       });
 
-      setBaplieData(response.data.baplie);
+      setBaplieData(response.baplie);
       toast.success("File uploaded successfully!");
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to upload file!");
-    }
-  };
 
-  const handleDownload = () => {
-    window.open("http://localhost:5000/download", "_blank");
+      // Auto-download file after generation
+      const downloadLink = document.createElement("a");
+      downloadLink.href = "http://localhost:5000/download";
+      downloadLink.download = "baplie_output.txt";
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+    } catch (error) {
+      toast.error(error.response?.data?.error || "Failed to upload file!");
+    } finally {
+      setLoading(false);
+    }
+    
   };
 
   return (
-    <div>
-    <div className="application">
+    <div className="app-container">
+      <div className="application">
             <Helmet>
                 <meta charSet="utf-8" />
-                <title>Baplie Converter</title>
-                <link rel="canonical" href="http://BaplieConverter" />
+                <title>Baplie</title>
+                <link rel="canonical" href="http://mysite.com/example" />
             </Helmet>
-            ...
+            
         </div>
-    <div className="App">
       <ToastContainer />
       <div className="container">
         <h1>BAPLIE Code Converter</h1>
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label>Upload Excel File</label>
-            <input type="file" onChange={handleFileChange} accept=".xlsx" />
+            <label htmlFor="file">Upload Excel File</label>
+            <input type="file" name="file" id="file" onChange={handleChange} accept=".xlsx" />
           </div>
-          <div className="form-group">
-            <label>Vessel Name</label>
-            <input
-              type="text"
-              value={vesselName}
-              onChange={(e) => setVesselName(e.target.value)}
-              placeholder="Enter vessel name"
+
+          {["vesselName", "senderName", "receiverName"].map((field) => (
+            <InputField
+              key={field}
+              label={field.replace(/([A-Z])/g, " $1")}
+              name={field}
+              value={formData[field]}
+              onChange={handleChange}
             />
-          </div>
-          <div className="form-group">
-            <label>Sender Name</label>
-            <input
-              type="text"
-              value={senderName}
-              onChange={(e) => setSenderName(e.target.value)}
-              placeholder="Enter sender name"
-            />
-          </div>
-          <div className="form-group">
-            <label>Receiver Name</label>
-            <input
-              type="text"
-              value={receiverName}
-              onChange={(e) => setReceiverName(e.target.value)}
-              placeholder="Enter receiver name"
-            />
-          </div>
-          <button type="submit" className="btn">Upload & Generate</button>
+          ))}
+
+          <button type="submit" className="btn" disabled={loading}>
+            {loading ? "Uploading..." : "Upload & Generate"}
+          </button>
         </form>
+
         {baplieData && (
           <div className="result">
             <h2>Generated BAPLIE</h2>
             <pre>{baplieData}</pre>
-            <button onClick={handleDownload} className="btn download">
-              Download Output File
-            </button>
           </div>
         )}
-      </div>
       </div>
     </div>
   );
